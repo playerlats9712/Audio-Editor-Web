@@ -1,300 +1,479 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, Play, Pause, Download, RefreshCcw } from "lucide-react";
-import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
-
-function formatPercent(multiplier: number) {
-  return `${(multiplier * 100).toFixed(1)}%`;
-}
-
-function centsToFactor(cents: number) {
-  return Math.pow(2, cents / 1200);
-}
-
-function splitAtempoChain(value: number) {
-  const parts: number[] = [];
-  let current = value;
-
-  while (current < 0.5) {
-    parts.push(0.5);
-    current /= 0.5;
-  }
-  while (current > 2.0) {
-    parts.push(2.0);
-    current /= 2.0;
-  }
-
-  parts.push(Number(current.toFixed(6)));
-  return parts.map((v) => `atempo=${v}`).join(",");
-}
-
-function buildFilter(pitchCents: number, tempoMultiplier: number) {
-  const pitchFactor = centsToFactor(pitchCents);
-  const effectiveTempoAfterPitch = tempoMultiplier / pitchFactor;
-
-  const filters = [
-    `asetrate=44100*${pitchFactor.toFixed(8)}`,
-    `aresample=44100`,
-    splitAtempoChain(effectiveTempoAfterPitch),
-  ];
-
-  return filters.join(",");
-}
-
-export default function AudioPitchTempoWebapp() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const ffmpegRef = useRef<any>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [inputUrl, setInputUrl] = useState<string | null>(null);
-  const [outputUrl, setOutputUrl] = useState<string | null>(null);
-  const [pitchCents, setPitchCents] = useState<number[]>([0]);
-  const [tempo, setTempo] = useState<number[]>([1]);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const pitchValue = pitchCents[0];
-  const tempoValue = tempo[0];
-  const pitchFactor = useMemo(() => centsToFactor(pitchValue), [pitchValue]);
-  const filterGraph = useMemo(() => buildFilter(pitchValue, tempoValue), [pitchValue, tempoValue]);
-
-  async function ensureFFmpeg() {
-    if (ffmpegRef.current) return ffmpegRef.current;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const ffmpeg = createFFmpeg({ log: false });
-      await ffmpeg.load();
-      ffmpegRef.current = ffmpeg;
-      setLoaded(true);
-      return ffmpeg;
-    } catch (e) {
-      console.error(e);
-      setError("FFmpeg konnte nicht geladen werden. In manchen Umgebungen blockiert der Browser WebAssembly oder große Pakete.");
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function resetUrls() {
-    if (inputUrl) URL.revokeObjectURL(inputUrl);
-    if (outputUrl) URL.revokeObjectURL(outputUrl);
-    setInputUrl(null);
-    setOutputUrl(null);
-    setPlaying(false);
-  }
-
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0] ?? null;
-    resetUrls();
-    setFile(selected);
-    setError(null);
-    if (selected) {
-      setInputUrl(URL.createObjectURL(selected));
-    }
-  }
-
-  async function processAudio() {
-    if (!file) {
-      setError("Bitte zuerst eine Audiodatei hochladen.");
-      return;
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audio Pitch & Tempo Tool</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #ffffff;
+      --text: #111111;
+      --muted: #666666;
+      --border: #e5e5e5;
+      --accent: #111111;
     }
 
-    setProcessing(true);
-    setError(null);
+    * { box-sizing: border-box; }
 
-    try {
-      const ffmpeg = await ensureFFmpeg();
-      const inputName = "input";
-      const outputName = "output.wav";
-      const data = await fetchFile(file);
-
-      try {
-        ffmpeg.FS("unlink", inputName);
-      } catch {}
-      try {
-        ffmpeg.FS("unlink", outputName);
-      } catch {}
-
-      ffmpeg.FS("writeFile", inputName, data);
-      await ffmpeg.run("-i", inputName, "-vn", "-af", filterGraph, outputName);
-      const out = ffmpeg.FS("readFile", outputName);
-
-      if (outputUrl) URL.revokeObjectURL(outputUrl);
-      const blob = new Blob([out.buffer], { type: "audio/wav" });
-      const url = URL.createObjectURL(blob);
-      setOutputUrl(url);
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-      setPlaying(false);
-    } catch (e) {
-      console.error(e);
-      setError("Die Verarbeitung ist fehlgeschlagen. Teste am besten zuerst eine kurze MP3 oder WAV-Datei.");
-    } finally {
-      setProcessing(false);
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
-  }
 
-  function togglePlayback() {
-    if (!audioRef.current || !outputUrl) return;
-
-    if (playing) {
-      audioRef.current.pause();
-      setPlaying(false);
-    } else {
-      audioRef.current.play();
-      setPlaying(true);
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
     }
-  }
 
-  return (
-    <div className="min-h-screen bg-neutral-50 p-6 md:p-10">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className="space-y-3">
-          <Badge className="rounded-full px-3 py-1 text-sm">Pitch + Tempo Tool</Badge>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">Audio in Browser pitchen und timestretchen</h1>
-          <p className="max-w-3xl text-base text-neutral-600 md:text-lg">
-            Lade eine Datei hoch, stelle Pitch in Cents und Tempo in Prozent ein und exportiere das Ergebnis direkt im Browser.
-          </p>
-        </div>
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 1.05;
+      margin: 0 0 10px;
+    }
 
-        <Alert className="rounded-2xl border-neutral-200 bg-white">
-          <AlertTitle>Wichtig</AlertTitle>
-          <AlertDescription>
-            Das Tool verarbeitet die Datei lokal im Browser mit FFmpeg WebAssembly. Bei langen Tracks kann das etwas dauern. Für beste Kompatibilität erst mit kurzen MP3- oder WAV-Dateien testen.
-          </AlertDescription>
-        </Alert>
+    p.lead {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 760px;
+    }
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="rounded-3xl border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle>Datei</CardTitle>
-              <CardDescription>Upload deiner Audio-Datei</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="file">Audio auswählen</Label>
-                <div className="flex items-center gap-3">
-                  <Input id="file" type="file" accept="audio/*" onChange={handleFileChange} />
-                  <Upload className="h-5 w-5 text-neutral-500" />
-                </div>
-              </div>
+    .badge {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--border);
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
 
-              {file && (
-                <div className="rounded-2xl bg-neutral-100 p-4 text-sm text-neutral-700">
-                  <div><strong>Datei:</strong> {file.name}</div>
-                  <div><strong>Typ:</strong> {file.type || "unbekannt"}</div>
-                  <div><strong>Größe:</strong> {(file.size / 1024 / 1024).toFixed(2)} MB</div>
-                </div>
-              )}
+    .alert {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px 18px;
+      margin-bottom: 24px;
+    }
 
-              {inputUrl && (
-                <div className="space-y-2">
-                  <Label>Original anhören</Label>
-                  <audio controls src={inputUrl} className="w-full" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
 
-          <Card className="rounded-3xl border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle>Einstellungen</CardTitle>
-              <CardDescription>Pitch und Tempo unabhängig voneinander ändern</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Pitch</Label>
-                  <span className="text-sm text-neutral-600">{pitchValue > 0 ? "+" : ""}{pitchValue} cents</span>
-                </div>
-                <Slider value={pitchCents} min={-1200} max={1200} step={1} onValueChange={setPitchCents} />
-                <p className="text-sm text-neutral-500">Faktor: {pitchFactor.toFixed(5)}×</p>
-              </div>
+    .card {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 2px 18px rgba(0,0,0,0.05);
+    }
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Tempo</Label>
-                  <span className="text-sm text-neutral-600">{formatPercent(tempoValue)}</span>
-                </div>
-                <Slider value={tempo} min={0.5} max={2} step={0.001} onValueChange={setTempo} />
-                <p className="text-sm text-neutral-500">0.5× bis 2.0×</p>
-              </div>
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 1.2rem;
+    }
 
-              <div className="rounded-2xl bg-neutral-100 p-4 text-sm text-neutral-700">
-                <div><strong>Filter:</strong></div>
-                <code className="mt-2 block whitespace-pre-wrap break-all text-xs">{filterGraph}</code>
-              </div>
+    .sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 18px;
+    }
 
-              <div className="flex flex-wrap gap-3">
-                <Button className="rounded-2xl" onClick={processAudio} disabled={processing || loading || !file}>
-                  {(processing || loading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                  {loading ? "Engine lädt..." : processing ? "Verarbeite..." : "Audio rendern"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+    .row { margin-bottom: 18px; }
 
-        <Card className="rounded-3xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Ergebnis</CardTitle>
-            <CardDescription>Preview und Download</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {error}
-              </div>
-            )}
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
 
-            {outputUrl ? (
-              <>
-                <audio
-                  ref={audioRef}
-                  controls
-                  src={outputUrl}
-                  className="w-full"
-                  onPause={() => setPlaying(false)}
-                  onPlay={() => setPlaying(true)}
-                  onEnded={() => setPlaying(false)}
-                />
+    input[type="file"], input[type="number"], input[type="range"] {
+      width: 100%;
+    }
 
-                <div className="flex flex-wrap gap-3">
-                  <Button variant="secondary" className="rounded-2xl" onClick={togglePlayback}>
-                    {playing ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                    {playing ? "Pause" : "Abspielen"}
-                  </Button>
+    input[type="file"], input[type="number"] {
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 15px;
+    }
 
-                  <Button asChild className="rounded-2xl">
-                    <a href={outputUrl} download={(file?.name?.replace(/\.[^.]+$/, "") || "processed") + "_processed.wav"}>
-                      <Download className="mr-2 h-4 w-4" />
-                      WAV herunterladen
-                    </a>
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-2xl bg-neutral-100 p-6 text-neutral-600">
-                Noch kein gerendertes Audio vorhanden.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+    input[type="range"] {
+      accent-color: #111;
+    }
+
+    .info, .result-box, .error {
+      border-radius: 16px;
+      padding: 14px;
+      font-size: 14px;
+    }
+
+    .info, .result-box {
+      background: #f1f1f1;
+    }
+
+    .error {
+      background: #fff0f0;
+      border: 1px solid #f0caca;
+      color: #9b1c1c;
+    }
+
+    .value-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    button, .download-link {
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button.secondary {
+      background: #e9e9e9;
+      color: #111;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    code {
+      display: block;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+      .wrap { padding: 20px 14px 36px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge">Pitch + Tempo Tool</div>
+    <h1>Audio im Browser pitchen und schneller machen</h1>
+    <p class="lead">
+      Eine einzelne HTML-Datei. Datei hochladen, Pitch in Cents und Tempo in Prozent einstellen,
+      dann das Ergebnis direkt im Browser rendern und herunterladen.
+    </p>
+
+    <div class="alert">
+      <strong>Wichtig:</strong> Diese Datei lädt FFmpeg als WebAssembly aus einem CDN. Sie funktioniert am besten in einem modernen Desktop-Browser.
+      Sehr lange Dateien brauchen mehr RAM und Zeit.
     </div>
-  );
-}
+
+    <div class="grid">
+      <section class="card">
+        <h2>Datei</h2>
+        <div class="sub">Audio auswählen und Original anhören</div>
+
+        <div class="row">
+          <label for="fileInput">Audio-Datei</label>
+          <input id="fileInput" type="file" accept="audio/*" />
+        </div>
+
+        <div id="fileInfo" class="info">Noch keine Datei geladen.</div>
+
+        <div class="row">
+          <label>Original</label>
+          <audio id="inputAudio" controls></audio>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Einstellungen</h2>
+        <div class="sub">Pitch und Tempo getrennt ändern</div>
+
+        <div class="row">
+          <div class="value-line">
+            <label for="pitchSlider">Pitch</label>
+            <span id="pitchLabel">0 cents</span>
+          </div>
+          <input id="pitchSlider" type="range" min="-1200" max="1200" step="1" value="0" />
+          <div class="btns" style="margin-top:10px;">
+            <input id="pitchNumber" type="number" min="-1200" max="1200" step="1" value="0" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="value-line">
+            <label for="tempoSlider">Tempo</label>
+            <span id="tempoLabel">100.0%</span>
+          </div>
+          <input id="tempoSlider" type="range" min="50" max="200" step="0.1" value="100" />
+          <div class="btns" style="margin-top:10px;">
+            <input id="tempoNumber" type="number" min="50" max="200" step="0.1" value="100" />
+          </div>
+        </div>
+
+        <div class="result-box">
+          <strong>FFmpeg Filter</strong>
+          <code id="filterText">asetrate=44100*1.00000000,aresample=44100,atempo=1</code>
+        </div>
+
+        <div class="btns">
+          <button id="renderBtn">Audio rendern</button>
+          <button id="resetBtn" class="secondary">Zurücksetzen</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top: 20px;">
+      <h2>Ergebnis</h2>
+      <div class="sub">Preview und Download</div>
+
+      <div id="statusBox" class="info">Noch kein Export.</div>
+      <div id="errorBox" class="error" style="display:none; margin-top: 12px;"></div>
+
+      <audio id="outputAudio" controls style="margin-top:14px;"></audio>
+
+      <div class="btns">
+        <a id="downloadLink" class="download-link" style="display:none;" download="processed.wav">WAV herunterladen</a>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+    import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+
+    const fileInput = document.getElementById('fileInput');
+    const inputAudio = document.getElementById('inputAudio');
+    const outputAudio = document.getElementById('outputAudio');
+    const fileInfo = document.getElementById('fileInfo');
+    const statusBox = document.getElementById('statusBox');
+    const errorBox = document.getElementById('errorBox');
+    const renderBtn = document.getElementById('renderBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const downloadLink = document.getElementById('downloadLink');
+
+    const pitchSlider = document.getElementById('pitchSlider');
+    const tempoSlider = document.getElementById('tempoSlider');
+    const pitchNumber = document.getElementById('pitchNumber');
+    const tempoNumber = document.getElementById('tempoNumber');
+    const pitchLabel = document.getElementById('pitchLabel');
+    const tempoLabel = document.getElementById('tempoLabel');
+    const filterText = document.getElementById('filterText');
+
+    let selectedFile = null;
+    let inputUrl = null;
+    let outputUrl = null;
+    let ffmpeg = null;
+    let ffmpegLoaded = false;
+
+    function centsToFactor(cents) {
+      return Math.pow(2, cents / 1200);
+    }
+
+    function splitAtempoChain(value) {
+      const parts = [];
+      let current = value;
+
+      while (current < 0.5) {
+        parts.push(0.5);
+        current /= 0.5;
+      }
+      while (current > 2.0) {
+        parts.push(2.0);
+        current /= 2.0;
+      }
+
+      parts.push(Number(current.toFixed(6)));
+      return parts.map(v => `atempo=${v}`).join(',');
+    }
+
+    function buildFilter(pitchCents, tempoMultiplier) {
+      const pitchFactor = centsToFactor(pitchCents);
+      const effectiveTempoAfterPitch = tempoMultiplier / pitchFactor;
+      return [
+        `asetrate=44100*${pitchFactor.toFixed(8)}`,
+        'aresample=44100',
+        splitAtempoChain(effectiveTempoAfterPitch)
+      ].join(',');
+    }
+
+    function updateUi() {
+      const pitch = Number(pitchSlider.value);
+      const tempoPercent = Number(tempoSlider.value);
+      const tempoMultiplier = tempoPercent / 100;
+
+      pitchLabel.textContent = `${pitch > 0 ? '+' : ''}${pitch} cents`;
+      tempoLabel.textContent = `${tempoPercent.toFixed(1)}%`;
+      pitchNumber.value = String(pitch);
+      tempoNumber.value = String(tempoPercent);
+      filterText.textContent = buildFilter(pitch, tempoMultiplier);
+    }
+
+    function setError(message = '') {
+      if (!message) {
+        errorBox.style.display = 'none';
+        errorBox.textContent = '';
+      } else {
+        errorBox.style.display = 'block';
+        errorBox.textContent = message;
+      }
+    }
+
+    async function ensureFFmpeg() {
+      if (ffmpegLoaded && ffmpeg) return ffmpeg;
+
+      statusBox.textContent = 'Lade FFmpeg Engine...';
+      renderBtn.disabled = true;
+      setError('');
+
+      const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
+      ffmpeg = new FFmpeg();
+
+      ffmpeg.on('log', ({ message }) => {
+        statusBox.textContent = message;
+      });
+
+      const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm');
+
+      await ffmpeg.load({ coreURL, wasmURL });
+      ffmpegLoaded = true;
+      renderBtn.disabled = false;
+      statusBox.textContent = 'FFmpeg geladen.';
+      return ffmpeg;
+    }
+
+    function revokeUrls() {
+      if (inputUrl) URL.revokeObjectURL(inputUrl);
+      if (outputUrl) URL.revokeObjectURL(outputUrl);
+      inputUrl = null;
+      outputUrl = null;
+    }
+
+    fileInput.addEventListener('change', () => {
+      revokeUrls();
+      setError('');
+      downloadLink.style.display = 'none';
+      outputAudio.removeAttribute('src');
+      outputAudio.load();
+
+      selectedFile = fileInput.files?.[0] || null;
+      if (!selectedFile) {
+        fileInfo.textContent = 'Noch keine Datei geladen.';
+        inputAudio.removeAttribute('src');
+        inputAudio.load();
+        return;
+      }
+
+      inputUrl = URL.createObjectURL(selectedFile);
+      inputAudio.src = inputUrl;
+      fileInfo.innerHTML = `<strong>Datei:</strong> ${selectedFile.name}<br><strong>Typ:</strong> ${selectedFile.type || 'unbekannt'}<br><strong>Größe:</strong> ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`;
+      statusBox.textContent = 'Datei geladen. Bereit zum Rendern.';
+    });
+
+    pitchSlider.addEventListener('input', updateUi);
+    tempoSlider.addEventListener('input', updateUi);
+
+    pitchNumber.addEventListener('input', () => {
+      let val = Number(pitchNumber.value || 0);
+      val = Math.max(-1200, Math.min(1200, val));
+      pitchSlider.value = String(val);
+      updateUi();
+    });
+
+    tempoNumber.addEventListener('input', () => {
+      let val = Number(tempoNumber.value || 100);
+      val = Math.max(50, Math.min(200, val));
+      tempoSlider.value = String(val);
+      updateUi();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      pitchSlider.value = '0';
+      tempoSlider.value = '100';
+      pitchNumber.value = '0';
+      tempoNumber.value = '100';
+      updateUi();
+      setError('');
+      statusBox.textContent = 'Werte zurückgesetzt.';
+    });
+
+    renderBtn.addEventListener('click', async () => {
+      if (!selectedFile) {
+        setError('Bitte zuerst eine Audiodatei auswählen.');
+        return;
+      }
+
+      try {
+        renderBtn.disabled = true;
+        setError('');
+        statusBox.textContent = 'Initialisiere...';
+
+        const engine = await ensureFFmpeg();
+        const inputName = 'input';
+        const outputName = 'output.wav';
+        const pitch = Number(pitchSlider.value);
+        const tempoMultiplier = Number(tempoSlider.value) / 100;
+        const filter = buildFilter(pitch, tempoMultiplier);
+
+        try { await engine.deleteFile(inputName); } catch {}
+        try { await engine.deleteFile(outputName); } catch {}
+
+        await engine.writeFile(inputName, await fetchFile(selectedFile));
+        statusBox.textContent = 'Render läuft...';
+        await engine.exec(['-i', inputName, '-vn', '-af', filter, outputName]);
+
+        const data = await engine.readFile(outputName);
+        const blob = new Blob([data.buffer], { type: 'audio/wav' });
+
+        if (outputUrl) URL.revokeObjectURL(outputUrl);
+        outputUrl = URL.createObjectURL(blob);
+        outputAudio.src = outputUrl;
+        downloadLink.href = outputUrl;
+        downloadLink.download = (selectedFile.name.replace(/\.[^.]+$/, '') || 'processed') + '_processed.wav';
+        downloadLink.style.display = 'inline-flex';
+
+        statusBox.textContent = 'Fertig. Du kannst jetzt vorhören oder die WAV herunterladen.';
+      } catch (err) {
+        console.error(err);
+        setError('Verarbeitung fehlgeschlagen. Öffne die Datei über einen lokalen Webserver oder teste zuerst eine kurze MP3/WAV. file:// funktioniert bei Modul-CDNs manchmal nicht.');
+        statusBox.textContent = 'Fehler bei der Verarbeitung.';
+      } finally {
+        renderBtn.disabled = false;
+      }
+    });
+
+    updateUi();
+  </script>
+</body>
+</html>
