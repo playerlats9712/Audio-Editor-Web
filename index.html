@@ -1,0 +1,300 @@
+import React, { useMemo, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Upload, Play, Pause, Download, RefreshCcw } from "lucide-react";
+import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
+
+function formatPercent(multiplier: number) {
+  return `${(multiplier * 100).toFixed(1)}%`;
+}
+
+function centsToFactor(cents: number) {
+  return Math.pow(2, cents / 1200);
+}
+
+function splitAtempoChain(value: number) {
+  const parts: number[] = [];
+  let current = value;
+
+  while (current < 0.5) {
+    parts.push(0.5);
+    current /= 0.5;
+  }
+  while (current > 2.0) {
+    parts.push(2.0);
+    current /= 2.0;
+  }
+
+  parts.push(Number(current.toFixed(6)));
+  return parts.map((v) => `atempo=${v}`).join(",");
+}
+
+function buildFilter(pitchCents: number, tempoMultiplier: number) {
+  const pitchFactor = centsToFactor(pitchCents);
+  const effectiveTempoAfterPitch = tempoMultiplier / pitchFactor;
+
+  const filters = [
+    `asetrate=44100*${pitchFactor.toFixed(8)}`,
+    `aresample=44100`,
+    splitAtempoChain(effectiveTempoAfterPitch),
+  ];
+
+  return filters.join(",");
+}
+
+export default function AudioPitchTempoWebapp() {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ffmpegRef = useRef<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [inputUrl, setInputUrl] = useState<string | null>(null);
+  const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [pitchCents, setPitchCents] = useState<number[]>([0]);
+  const [tempo, setTempo] = useState<number[]>([1]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pitchValue = pitchCents[0];
+  const tempoValue = tempo[0];
+  const pitchFactor = useMemo(() => centsToFactor(pitchValue), [pitchValue]);
+  const filterGraph = useMemo(() => buildFilter(pitchValue, tempoValue), [pitchValue, tempoValue]);
+
+  async function ensureFFmpeg() {
+    if (ffmpegRef.current) return ffmpegRef.current;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const ffmpeg = createFFmpeg({ log: false });
+      await ffmpeg.load();
+      ffmpegRef.current = ffmpeg;
+      setLoaded(true);
+      return ffmpeg;
+    } catch (e) {
+      console.error(e);
+      setError("FFmpeg konnte nicht geladen werden. In manchen Umgebungen blockiert der Browser WebAssembly oder große Pakete.");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function resetUrls() {
+    if (inputUrl) URL.revokeObjectURL(inputUrl);
+    if (outputUrl) URL.revokeObjectURL(outputUrl);
+    setInputUrl(null);
+    setOutputUrl(null);
+    setPlaying(false);
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] ?? null;
+    resetUrls();
+    setFile(selected);
+    setError(null);
+    if (selected) {
+      setInputUrl(URL.createObjectURL(selected));
+    }
+  }
+
+  async function processAudio() {
+    if (!file) {
+      setError("Bitte zuerst eine Audiodatei hochladen.");
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const ffmpeg = await ensureFFmpeg();
+      const inputName = "input";
+      const outputName = "output.wav";
+      const data = await fetchFile(file);
+
+      try {
+        ffmpeg.FS("unlink", inputName);
+      } catch {}
+      try {
+        ffmpeg.FS("unlink", outputName);
+      } catch {}
+
+      ffmpeg.FS("writeFile", inputName, data);
+      await ffmpeg.run("-i", inputName, "-vn", "-af", filterGraph, outputName);
+      const out = ffmpeg.FS("readFile", outputName);
+
+      if (outputUrl) URL.revokeObjectURL(outputUrl);
+      const blob = new Blob([out.buffer], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      setOutputUrl(url);
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setPlaying(false);
+    } catch (e) {
+      console.error(e);
+      setError("Die Verarbeitung ist fehlgeschlagen. Teste am besten zuerst eine kurze MP3 oder WAV-Datei.");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  function togglePlayback() {
+    if (!audioRef.current || !outputUrl) return;
+
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      audioRef.current.play();
+      setPlaying(true);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-neutral-50 p-6 md:p-10">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="space-y-3">
+          <Badge className="rounded-full px-3 py-1 text-sm">Pitch + Tempo Tool</Badge>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">Audio in Browser pitchen und timestretchen</h1>
+          <p className="max-w-3xl text-base text-neutral-600 md:text-lg">
+            Lade eine Datei hoch, stelle Pitch in Cents und Tempo in Prozent ein und exportiere das Ergebnis direkt im Browser.
+          </p>
+        </div>
+
+        <Alert className="rounded-2xl border-neutral-200 bg-white">
+          <AlertTitle>Wichtig</AlertTitle>
+          <AlertDescription>
+            Das Tool verarbeitet die Datei lokal im Browser mit FFmpeg WebAssembly. Bei langen Tracks kann das etwas dauern. Für beste Kompatibilität erst mit kurzen MP3- oder WAV-Dateien testen.
+          </AlertDescription>
+        </Alert>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="rounded-3xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle>Datei</CardTitle>
+              <CardDescription>Upload deiner Audio-Datei</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="file">Audio auswählen</Label>
+                <div className="flex items-center gap-3">
+                  <Input id="file" type="file" accept="audio/*" onChange={handleFileChange} />
+                  <Upload className="h-5 w-5 text-neutral-500" />
+                </div>
+              </div>
+
+              {file && (
+                <div className="rounded-2xl bg-neutral-100 p-4 text-sm text-neutral-700">
+                  <div><strong>Datei:</strong> {file.name}</div>
+                  <div><strong>Typ:</strong> {file.type || "unbekannt"}</div>
+                  <div><strong>Größe:</strong> {(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                </div>
+              )}
+
+              {inputUrl && (
+                <div className="space-y-2">
+                  <Label>Original anhören</Label>
+                  <audio controls src={inputUrl} className="w-full" />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle>Einstellungen</CardTitle>
+              <CardDescription>Pitch und Tempo unabhängig voneinander ändern</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Pitch</Label>
+                  <span className="text-sm text-neutral-600">{pitchValue > 0 ? "+" : ""}{pitchValue} cents</span>
+                </div>
+                <Slider value={pitchCents} min={-1200} max={1200} step={1} onValueChange={setPitchCents} />
+                <p className="text-sm text-neutral-500">Faktor: {pitchFactor.toFixed(5)}×</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Tempo</Label>
+                  <span className="text-sm text-neutral-600">{formatPercent(tempoValue)}</span>
+                </div>
+                <Slider value={tempo} min={0.5} max={2} step={0.001} onValueChange={setTempo} />
+                <p className="text-sm text-neutral-500">0.5× bis 2.0×</p>
+              </div>
+
+              <div className="rounded-2xl bg-neutral-100 p-4 text-sm text-neutral-700">
+                <div><strong>Filter:</strong></div>
+                <code className="mt-2 block whitespace-pre-wrap break-all text-xs">{filterGraph}</code>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button className="rounded-2xl" onClick={processAudio} disabled={processing || loading || !file}>
+                  {(processing || loading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                  {loading ? "Engine lädt..." : processing ? "Verarbeite..." : "Audio rendern"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="rounded-3xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Ergebnis</CardTitle>
+            <CardDescription>Preview und Download</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {outputUrl ? (
+              <>
+                <audio
+                  ref={audioRef}
+                  controls
+                  src={outputUrl}
+                  className="w-full"
+                  onPause={() => setPlaying(false)}
+                  onPlay={() => setPlaying(true)}
+                  onEnded={() => setPlaying(false)}
+                />
+
+                <div className="flex flex-wrap gap-3">
+                  <Button variant="secondary" className="rounded-2xl" onClick={togglePlayback}>
+                    {playing ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                    {playing ? "Pause" : "Abspielen"}
+                  </Button>
+
+                  <Button asChild className="rounded-2xl">
+                    <a href={outputUrl} download={(file?.name?.replace(/\.[^.]+$/, "") || "processed") + "_processed.wav"}>
+                      <Download className="mr-2 h-4 w-4" />
+                      WAV herunterladen
+                    </a>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl bg-neutral-100 p-6 text-neutral-600">
+                Noch kein gerendertes Audio vorhanden.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
