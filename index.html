@@ -2,8 +2,8 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Audio Pitch & Tempo Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Audio Pitch & Tempo Tool – iOS Safari</title>
   <style>
     :root {
       --bg: #f5f5f5;
@@ -12,189 +12,84 @@
       --muted: #666666;
       --border: #e5e5e5;
       --accent: #111111;
+      --danger-bg: #fff0f0;
+      --danger-border: #f0caca;
+      --danger-text: #9b1c1c;
     }
-
-    * { box-sizing: border-box; }
-
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
     body {
-      margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      -webkit-text-size-adjust: 100%;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
-
-    .wrap {
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 32px 20px 48px;
-    }
-
-    h1 {
-      font-size: clamp(2rem, 4vw, 3.4rem);
-      line-height: 1.05;
-      margin: 0 0 10px;
-    }
-
-    p.lead {
-      margin: 0 0 24px;
-      color: var(--muted);
-      font-size: 1.05rem;
-      max-width: 760px;
-    }
-
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 40px; }
+    h1 { font-size: clamp(2rem, 6vw, 3.2rem); line-height: 1.05; margin: 0 0 10px; }
+    p.lead { margin: 0 0 20px; color: var(--muted); font-size: 1rem; max-width: 760px; }
     .badge {
-      display: inline-block;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: #fff;
-      border: 1px solid var(--border);
-      font-size: 14px;
-      margin-bottom: 14px;
+      display: inline-block; padding: 8px 12px; border-radius: 999px; background: #fff;
+      border: 1px solid var(--border); font-size: 14px; margin-bottom: 14px;
     }
-
-    .alert {
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 16px 18px;
-      margin-bottom: 24px;
+    .alert, .ios-box {
+      background: #fff; border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; margin-bottom: 16px;
     }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 20px;
-    }
-
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
     .card {
-      background: var(--card);
-      border-radius: 24px;
-      padding: 22px;
-      box-shadow: 0 2px 18px rgba(0,0,0,0.05);
+      background: var(--card); border-radius: 22px; padding: 20px; box-shadow: 0 2px 18px rgba(0,0,0,0.05);
     }
-
-    .card h2 {
-      margin: 0 0 6px;
-      font-size: 1.2rem;
-    }
-
-    .sub {
-      color: var(--muted);
-      font-size: 0.95rem;
-      margin-bottom: 18px;
-    }
-
-    .row { margin-bottom: 18px; }
-
-    label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    input[type="file"], input[type="number"], input[type="range"] {
-      width: 100%;
-    }
-
+    .card h2 { margin: 0 0 6px; font-size: 1.15rem; }
+    .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 16px; }
+    .row { margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    input[type="file"], input[type="number"], input[type="range"] { width: 100%; }
     input[type="file"], input[type="number"] {
-      border: 1px solid var(--border);
-      background: #fff;
-      padding: 12px 14px;
-      border-radius: 14px;
-      font-size: 15px;
+      border: 1px solid var(--border); background: #fff; padding: 12px 14px; border-radius: 14px; font-size: 16px;
     }
-
-    input[type="range"] {
-      accent-color: #111;
-    }
-
+    input[type="range"] { accent-color: #111; }
     .info, .result-box, .error {
-      border-radius: 16px;
-      padding: 14px;
-      font-size: 14px;
+      border-radius: 14px; padding: 14px; font-size: 14px; line-height: 1.45;
     }
-
-    .info, .result-box {
-      background: #f1f1f1;
-    }
-
-    .error {
-      background: #fff0f0;
-      border: 1px solid #f0caca;
-      color: #9b1c1c;
-    }
-
+    .info, .result-box { background: #f1f1f1; }
+    .error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text); }
     .value-line {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
-      font-size: 14px;
+      display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 14px; align-items: center;
     }
-
-    .btns {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 10px;
-    }
-
+    .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
     button, .download-link {
-      border: 0;
-      border-radius: 16px;
-      padding: 12px 16px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      background: var(--accent);
-      color: #fff;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      border: 0; border-radius: 16px; padding: 12px 16px; font-size: 15px; font-weight: 600; cursor: pointer;
+      background: var(--accent); color: #fff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+      min-height: 46px;
     }
-
-    button.secondary {
-      background: #e9e9e9;
-      color: #111;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    audio {
-      width: 100%;
-      margin-top: 8px;
-    }
-
-    code {
-      display: block;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-      margin-top: 8px;
-    }
-
+    button.secondary { background: #e9e9e9; color: #111; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    audio { width: 100%; margin-top: 8px; }
+    code { display: block; white-space: pre-wrap; word-break: break-word; font-size: 12px; margin-top: 8px; }
+    .small { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .good { color: #0a6a2b; }
     @media (max-width: 800px) {
       .grid { grid-template-columns: 1fr; }
-      .wrap { padding: 20px 14px 36px; }
+      .wrap { padding: 18px 12px 32px; }
+      .card { padding: 16px; border-radius: 18px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="badge">Pitch + Tempo Tool</div>
-    <h1>Audio im Browser pitchen und schneller machen</h1>
+    <div class="badge">iOS Safari kompatible Version</div>
+    <h1>Audio im Browser pitchen und timestretchen</h1>
     <p class="lead">
-      Eine einzelne HTML-Datei. Datei hochladen, Pitch in Cents und Tempo in Prozent einstellen,
-      dann das Ergebnis direkt im Browser rendern und herunterladen.
+      Diese Version vermeidet ES-Module im App-Code und ist speziell auf iPhone/iPad Safari ausgelegt.
+      Sie lädt FFmpeg klassisch per Script, hat einen iOS-Audio-Unlock-Button und exportiert als WAV.
     </p>
 
+    <div class="ios-box">
+      <strong>Für iPhone/iPad:</strong> Öffne die Datei am besten über HTTPS oder einen kleinen lokalen Server und tippe danach einmal auf
+      <strong>„Audio auf iPhone/iPad aktivieren“</strong>. Erst dann funktionieren Audio-Preview und Export auf iOS meist zuverlässig.
+    </div>
+
     <div class="alert">
-      <strong>Wichtig:</strong> Diese Datei lädt FFmpeg als WebAssembly aus einem CDN. Sie funktioniert am besten in einem modernen Desktop-Browser.
-      Sehr lange Dateien brauchen mehr RAM und Zeit.
+      <strong>Hinweis:</strong> Bei älteren iPhones oder langen Dateien kann FFmpeg im Browser an Speichergrenzen stoßen.
+      Wenn das passiert, nimm kürzere Ausschnitte oder arbeite mit MP3/WAV statt sehr großen Dateien.
     </div>
 
     <div class="grid">
@@ -204,14 +99,19 @@
 
         <div class="row">
           <label for="fileInput">Audio-Datei</label>
-          <input id="fileInput" type="file" accept="audio/*" />
+          <input id="fileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" />
         </div>
 
         <div id="fileInfo" class="info">Noch keine Datei geladen.</div>
 
-        <div class="row">
+        <div class="btns">
+          <button id="unlockBtn" type="button">Audio auf iPhone/iPad aktivieren</button>
+        </div>
+        <div id="unlockStatus" class="small">Noch nicht aktiviert.</div>
+
+        <div class="row" style="margin-top: 14px;">
           <label>Original</label>
-          <audio id="inputAudio" controls></audio>
+          <audio id="inputAudio" controls playsinline webkit-playsinline></audio>
         </div>
       </section>
 
@@ -226,7 +126,7 @@
           </div>
           <input id="pitchSlider" type="range" min="-1200" max="1200" step="1" value="0" />
           <div class="btns" style="margin-top:10px;">
-            <input id="pitchNumber" type="number" min="-1200" max="1200" step="1" value="0" />
+            <input id="pitchNumber" type="number" inputmode="numeric" min="-1200" max="1200" step="1" value="0" />
           </div>
         </div>
 
@@ -237,243 +137,310 @@
           </div>
           <input id="tempoSlider" type="range" min="50" max="200" step="0.1" value="100" />
           <div class="btns" style="margin-top:10px;">
-            <input id="tempoNumber" type="number" min="50" max="200" step="0.1" value="100" />
+            <input id="tempoNumber" type="number" inputmode="decimal" min="50" max="200" step="0.1" value="100" />
           </div>
         </div>
 
         <div class="result-box">
           <strong>FFmpeg Filter</strong>
           <code id="filterText">asetrate=44100*1.00000000,aresample=44100,atempo=1</code>
+          <div class="small">Pitch wird über Resampling geändert, Tempo danach unabhängig mit atempo korrigiert.</div>
         </div>
 
         <div class="btns">
-          <button id="renderBtn">Audio rendern</button>
-          <button id="resetBtn" class="secondary">Zurücksetzen</button>
+          <button id="loadEngineBtn" type="button" class="secondary">FFmpeg laden</button>
+          <button id="renderBtn" type="button">Audio rendern</button>
+          <button id="resetBtn" type="button" class="secondary">Zurücksetzen</button>
         </div>
       </section>
     </div>
 
-    <section class="card" style="margin-top: 20px;">
+    <section class="card" style="margin-top: 18px;">
       <h2>Ergebnis</h2>
       <div class="sub">Preview und Download</div>
 
       <div id="statusBox" class="info">Noch kein Export.</div>
       <div id="errorBox" class="error" style="display:none; margin-top: 12px;"></div>
 
-      <audio id="outputAudio" controls style="margin-top:14px;"></audio>
+      <audio id="outputAudio" controls playsinline webkit-playsinline style="margin-top:14px;"></audio>
 
       <div class="btns">
         <a id="downloadLink" class="download-link" style="display:none;" download="processed.wav">WAV herunterladen</a>
       </div>
+      <div class="small">Auf iOS öffnet sich die Datei je nach Browser-Version manchmal erst in einem neuen Tab oder in „Dateien“.</div>
     </section>
   </div>
 
-  <script type="module">
-    import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-    import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.3/dist/ffmpeg.min.js"></script>
+  <script>
+    (function () {
+      var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      var audioCtx = null;
+      var audioUnlocked = false;
+      var ffmpeg = null;
+      var ffmpegLoaded = false;
+      var selectedFile = null;
+      var inputUrl = null;
+      var outputUrl = null;
 
-    const fileInput = document.getElementById('fileInput');
-    const inputAudio = document.getElementById('inputAudio');
-    const outputAudio = document.getElementById('outputAudio');
-    const fileInfo = document.getElementById('fileInfo');
-    const statusBox = document.getElementById('statusBox');
-    const errorBox = document.getElementById('errorBox');
-    const renderBtn = document.getElementById('renderBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const downloadLink = document.getElementById('downloadLink');
+      var fileInput = document.getElementById('fileInput');
+      var inputAudio = document.getElementById('inputAudio');
+      var outputAudio = document.getElementById('outputAudio');
+      var fileInfo = document.getElementById('fileInfo');
+      var statusBox = document.getElementById('statusBox');
+      var errorBox = document.getElementById('errorBox');
+      var renderBtn = document.getElementById('renderBtn');
+      var resetBtn = document.getElementById('resetBtn');
+      var loadEngineBtn = document.getElementById('loadEngineBtn');
+      var downloadLink = document.getElementById('downloadLink');
+      var unlockBtn = document.getElementById('unlockBtn');
+      var unlockStatus = document.getElementById('unlockStatus');
 
-    const pitchSlider = document.getElementById('pitchSlider');
-    const tempoSlider = document.getElementById('tempoSlider');
-    const pitchNumber = document.getElementById('pitchNumber');
-    const tempoNumber = document.getElementById('tempoNumber');
-    const pitchLabel = document.getElementById('pitchLabel');
-    const tempoLabel = document.getElementById('tempoLabel');
-    const filterText = document.getElementById('filterText');
+      var pitchSlider = document.getElementById('pitchSlider');
+      var tempoSlider = document.getElementById('tempoSlider');
+      var pitchNumber = document.getElementById('pitchNumber');
+      var tempoNumber = document.getElementById('tempoNumber');
+      var pitchLabel = document.getElementById('pitchLabel');
+      var tempoLabel = document.getElementById('tempoLabel');
+      var filterText = document.getElementById('filterText');
 
-    let selectedFile = null;
-    let inputUrl = null;
-    let outputUrl = null;
-    let ffmpeg = null;
-    let ffmpegLoaded = false;
-
-    function centsToFactor(cents) {
-      return Math.pow(2, cents / 1200);
-    }
-
-    function splitAtempoChain(value) {
-      const parts = [];
-      let current = value;
-
-      while (current < 0.5) {
-        parts.push(0.5);
-        current /= 0.5;
-      }
-      while (current > 2.0) {
-        parts.push(2.0);
-        current /= 2.0;
+      function centsToFactor(cents) {
+        return Math.pow(2, cents / 1200);
       }
 
-      parts.push(Number(current.toFixed(6)));
-      return parts.map(v => `atempo=${v}`).join(',');
-    }
-
-    function buildFilter(pitchCents, tempoMultiplier) {
-      const pitchFactor = centsToFactor(pitchCents);
-      const effectiveTempoAfterPitch = tempoMultiplier / pitchFactor;
-      return [
-        `asetrate=44100*${pitchFactor.toFixed(8)}`,
-        'aresample=44100',
-        splitAtempoChain(effectiveTempoAfterPitch)
-      ].join(',');
-    }
-
-    function updateUi() {
-      const pitch = Number(pitchSlider.value);
-      const tempoPercent = Number(tempoSlider.value);
-      const tempoMultiplier = tempoPercent / 100;
-
-      pitchLabel.textContent = `${pitch > 0 ? '+' : ''}${pitch} cents`;
-      tempoLabel.textContent = `${tempoPercent.toFixed(1)}%`;
-      pitchNumber.value = String(pitch);
-      tempoNumber.value = String(tempoPercent);
-      filterText.textContent = buildFilter(pitch, tempoMultiplier);
-    }
-
-    function setError(message = '') {
-      if (!message) {
-        errorBox.style.display = 'none';
-        errorBox.textContent = '';
-      } else {
-        errorBox.style.display = 'block';
-        errorBox.textContent = message;
+      function splitAtempoChain(value) {
+        var parts = [];
+        var current = value;
+        while (current < 0.5) {
+          parts.push(0.5);
+          current /= 0.5;
+        }
+        while (current > 2.0) {
+          parts.push(2.0);
+          current /= 2.0;
+        }
+        parts.push(Number(current.toFixed(6)));
+        return parts.map(function (v) { return 'atempo=' + v; }).join(',');
       }
-    }
 
-    async function ensureFFmpeg() {
-      if (ffmpegLoaded && ffmpeg) return ffmpeg;
+      function buildFilter(pitchCents, tempoMultiplier) {
+        var pitchFactor = centsToFactor(pitchCents);
+        var effectiveTempoAfterPitch = tempoMultiplier / pitchFactor;
+        return [
+          'asetrate=44100*' + pitchFactor.toFixed(8),
+          'aresample=44100',
+          splitAtempoChain(effectiveTempoAfterPitch)
+        ].join(',');
+      }
 
-      statusBox.textContent = 'Lade FFmpeg Engine...';
-      renderBtn.disabled = true;
-      setError('');
+      function updateUi() {
+        var pitch = Number(pitchSlider.value);
+        var tempoPercent = Number(tempoSlider.value);
+        var tempoMultiplier = tempoPercent / 100;
+        pitchLabel.textContent = (pitch > 0 ? '+' : '') + pitch + ' cents';
+        tempoLabel.textContent = tempoPercent.toFixed(1) + '%';
+        pitchNumber.value = String(pitch);
+        tempoNumber.value = String(tempoPercent);
+        filterText.textContent = buildFilter(pitch, tempoMultiplier);
+      }
 
-      const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
-      ffmpeg = new FFmpeg();
+      function setError(message) {
+        if (!message) {
+          errorBox.style.display = 'none';
+          errorBox.textContent = '';
+        } else {
+          errorBox.style.display = 'block';
+          errorBox.textContent = message;
+        }
+      }
 
-      ffmpeg.on('log', ({ message }) => {
-        statusBox.textContent = message;
+      function setBusy(isBusy) {
+        renderBtn.disabled = isBusy;
+        loadEngineBtn.disabled = isBusy;
+        unlockBtn.disabled = isBusy;
+        fileInput.disabled = isBusy;
+      }
+
+      function revokeUrls() {
+        if (inputUrl) URL.revokeObjectURL(inputUrl);
+        if (outputUrl) URL.revokeObjectURL(outputUrl);
+        inputUrl = null;
+        outputUrl = null;
+      }
+
+      function unlockIOSAudio() {
+        try {
+          if (!AudioContextClass) {
+            unlockStatus.textContent = 'Web Audio wird auf diesem Gerät nicht unterstützt.';
+            return;
+          }
+          if (!audioCtx) audioCtx = new AudioContextClass();
+          var buffer = audioCtx.createBuffer(1, 1, 22050);
+          var source = audioCtx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioCtx.destination);
+          if (source.start) source.start(0); else if (source.noteOn) source.noteOn(0);
+          if (audioCtx.resume) {
+            audioCtx.resume().then(function () {
+              audioUnlocked = true;
+              unlockStatus.textContent = 'Audio aktiviert.';
+              unlockStatus.className = 'small good';
+            }).catch(function () {
+              audioUnlocked = true;
+              unlockStatus.textContent = 'Audio wahrscheinlich aktiviert.';
+              unlockStatus.className = 'small good';
+            });
+          } else {
+            audioUnlocked = true;
+            unlockStatus.textContent = 'Audio aktiviert.';
+            unlockStatus.className = 'small good';
+          }
+        } catch (err) {
+          console.error(err);
+          unlockStatus.textContent = 'Audio-Aktivierung fehlgeschlagen. Bitte erneut tippen.';
+        }
+      }
+
+      async function ensureFFmpeg() {
+        if (ffmpegLoaded && ffmpeg) return ffmpeg;
+        if (!window.FFmpeg || !window.FFmpeg.createFFmpeg || !window.FFmpeg.fetchFile) {
+          throw new Error('FFmpeg-Script wurde nicht geladen.');
+        }
+
+        setBusy(true);
+        setError('');
+        statusBox.textContent = 'Lade FFmpeg Engine...';
+
+        ffmpeg = window.FFmpeg.createFFmpeg({
+          log: true,
+          corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js'
+        });
+
+        await ffmpeg.load();
+        ffmpegLoaded = true;
+        statusBox.textContent = 'FFmpeg geladen.';
+        setBusy(false);
+        return ffmpeg;
+      }
+
+      unlockBtn.addEventListener('click', unlockIOSAudio, { passive: true });
+
+      loadEngineBtn.addEventListener('click', function () {
+        ensureFFmpeg().catch(function (err) {
+          console.error(err);
+          setBusy(false);
+          setError('FFmpeg konnte nicht geladen werden. Öffne die Datei über HTTPS oder einen lokalen Server.');
+          statusBox.textContent = 'Fehler beim Laden von FFmpeg.';
+        });
       });
 
-      const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm');
-
-      await ffmpeg.load({ coreURL, wasmURL });
-      ffmpegLoaded = true;
-      renderBtn.disabled = false;
-      statusBox.textContent = 'FFmpeg geladen.';
-      return ffmpeg;
-    }
-
-    function revokeUrls() {
-      if (inputUrl) URL.revokeObjectURL(inputUrl);
-      if (outputUrl) URL.revokeObjectURL(outputUrl);
-      inputUrl = null;
-      outputUrl = null;
-    }
-
-    fileInput.addEventListener('change', () => {
-      revokeUrls();
-      setError('');
-      downloadLink.style.display = 'none';
-      outputAudio.removeAttribute('src');
-      outputAudio.load();
-
-      selectedFile = fileInput.files?.[0] || null;
-      if (!selectedFile) {
-        fileInfo.textContent = 'Noch keine Datei geladen.';
-        inputAudio.removeAttribute('src');
-        inputAudio.load();
-        return;
-      }
-
-      inputUrl = URL.createObjectURL(selectedFile);
-      inputAudio.src = inputUrl;
-      fileInfo.innerHTML = `<strong>Datei:</strong> ${selectedFile.name}<br><strong>Typ:</strong> ${selectedFile.type || 'unbekannt'}<br><strong>Größe:</strong> ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`;
-      statusBox.textContent = 'Datei geladen. Bereit zum Rendern.';
-    });
-
-    pitchSlider.addEventListener('input', updateUi);
-    tempoSlider.addEventListener('input', updateUi);
-
-    pitchNumber.addEventListener('input', () => {
-      let val = Number(pitchNumber.value || 0);
-      val = Math.max(-1200, Math.min(1200, val));
-      pitchSlider.value = String(val);
-      updateUi();
-    });
-
-    tempoNumber.addEventListener('input', () => {
-      let val = Number(tempoNumber.value || 100);
-      val = Math.max(50, Math.min(200, val));
-      tempoSlider.value = String(val);
-      updateUi();
-    });
-
-    resetBtn.addEventListener('click', () => {
-      pitchSlider.value = '0';
-      tempoSlider.value = '100';
-      pitchNumber.value = '0';
-      tempoNumber.value = '100';
-      updateUi();
-      setError('');
-      statusBox.textContent = 'Werte zurückgesetzt.';
-    });
-
-    renderBtn.addEventListener('click', async () => {
-      if (!selectedFile) {
-        setError('Bitte zuerst eine Audiodatei auswählen.');
-        return;
-      }
-
-      try {
-        renderBtn.disabled = true;
+      fileInput.addEventListener('change', function () {
+        revokeUrls();
         setError('');
-        statusBox.textContent = 'Initialisiere...';
+        downloadLink.style.display = 'none';
+        outputAudio.removeAttribute('src');
+        outputAudio.load();
 
-        const engine = await ensureFFmpeg();
-        const inputName = 'input';
-        const outputName = 'output.wav';
-        const pitch = Number(pitchSlider.value);
-        const tempoMultiplier = Number(tempoSlider.value) / 100;
-        const filter = buildFilter(pitch, tempoMultiplier);
+        selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        if (!selectedFile) {
+          fileInfo.textContent = 'Noch keine Datei geladen.';
+          inputAudio.removeAttribute('src');
+          inputAudio.load();
+          return;
+        }
 
-        try { await engine.deleteFile(inputName); } catch {}
-        try { await engine.deleteFile(outputName); } catch {}
+        inputUrl = URL.createObjectURL(selectedFile);
+        inputAudio.src = inputUrl;
+        inputAudio.load();
+        fileInfo.innerHTML = '<strong>Datei:</strong> ' + selectedFile.name + '<br><strong>Typ:</strong> ' + (selectedFile.type || 'unbekannt') + '<br><strong>Größe:</strong> ' + (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
+        statusBox.textContent = 'Datei geladen. Bereit zum Rendern.';
+      });
 
-        await engine.writeFile(inputName, await fetchFile(selectedFile));
-        statusBox.textContent = 'Render läuft...';
-        await engine.exec(['-i', inputName, '-vn', '-af', filter, outputName]);
+      pitchSlider.addEventListener('input', updateUi);
+      tempoSlider.addEventListener('input', updateUi);
 
-        const data = await engine.readFile(outputName);
-        const blob = new Blob([data.buffer], { type: 'audio/wav' });
+      pitchNumber.addEventListener('input', function () {
+        var val = Number(pitchNumber.value || 0);
+        val = Math.max(-1200, Math.min(1200, val));
+        pitchSlider.value = String(val);
+        updateUi();
+      });
 
-        if (outputUrl) URL.revokeObjectURL(outputUrl);
-        outputUrl = URL.createObjectURL(blob);
-        outputAudio.src = outputUrl;
-        downloadLink.href = outputUrl;
-        downloadLink.download = (selectedFile.name.replace(/\.[^.]+$/, '') || 'processed') + '_processed.wav';
-        downloadLink.style.display = 'inline-flex';
+      tempoNumber.addEventListener('input', function () {
+        var val = Number(tempoNumber.value || 100);
+        val = Math.max(50, Math.min(200, val));
+        tempoSlider.value = String(val);
+        updateUi();
+      });
 
-        statusBox.textContent = 'Fertig. Du kannst jetzt vorhören oder die WAV herunterladen.';
-      } catch (err) {
-        console.error(err);
-        setError('Verarbeitung fehlgeschlagen. Öffne die Datei über einen lokalen Webserver oder teste zuerst eine kurze MP3/WAV. file:// funktioniert bei Modul-CDNs manchmal nicht.');
-        statusBox.textContent = 'Fehler bei der Verarbeitung.';
-      } finally {
-        renderBtn.disabled = false;
-      }
-    });
+      resetBtn.addEventListener('click', function () {
+        pitchSlider.value = '0';
+        tempoSlider.value = '100';
+        pitchNumber.value = '0';
+        tempoNumber.value = '100';
+        updateUi();
+        setError('');
+        statusBox.textContent = 'Werte zurückgesetzt.';
+      });
 
-    updateUi();
+      renderBtn.addEventListener('click', async function () {
+        if (!selectedFile) {
+          setError('Bitte zuerst eine Audiodatei auswählen.');
+          return;
+        }
+
+        if (!audioUnlocked) {
+          unlockIOSAudio();
+        }
+
+        try {
+          setBusy(true);
+          setError('');
+          statusBox.textContent = 'Initialisiere...';
+
+          var engine = await ensureFFmpeg();
+          var fetchFile = window.FFmpeg.fetchFile;
+          var inputName = 'input';
+          var outputName = 'output.wav';
+          var pitch = Number(pitchSlider.value);
+          var tempoMultiplier = Number(tempoSlider.value) / 100;
+          var filter = buildFilter(pitch, tempoMultiplier);
+
+          try { ffmpeg.FS('unlink', inputName); } catch (e) {}
+          try { ffmpeg.FS('unlink', outputName); } catch (e) {}
+
+          statusBox.textContent = 'Datei wird eingelesen...';
+          ffmpeg.FS('writeFile', inputName, await fetchFile(selectedFile));
+          statusBox.textContent = 'Render läuft...';
+          await ffmpeg.run('-i', inputName, '-vn', '-af', filter, outputName);
+
+          var data = ffmpeg.FS('readFile', outputName);
+          var blob = new Blob([data.buffer], { type: 'audio/wav' });
+          if (outputUrl) URL.revokeObjectURL(outputUrl);
+          outputUrl = URL.createObjectURL(blob);
+
+          outputAudio.src = outputUrl;
+          outputAudio.load();
+          downloadLink.href = outputUrl;
+          downloadLink.download = (selectedFile.name.replace(/\.[^.]+$/, '') || 'processed') + '_processed.wav';
+          downloadLink.style.display = 'inline-flex';
+          statusBox.textContent = 'Fertig. Du kannst jetzt vorhören oder die WAV herunterladen.';
+        } catch (err) {
+          console.error(err);
+          setError('Verarbeitung fehlgeschlagen. Auf iOS hilft oft: Seite neu laden, zuerst „Audio auf iPhone/iPad aktivieren“ tippen, dann FFmpeg laden, dann eine kurze MP3/WAV testen.');
+          statusBox.textContent = 'Fehler bei der Verarbeitung.';
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      document.addEventListener('touchend', function onFirstTouch() {
+        unlockIOSAudio();
+        document.removeEventListener('touchend', onFirstTouch);
+      }, { passive: true });
+
+      updateUi();
+    })();
   </script>
 </body>
 </html>
